@@ -1,16 +1,25 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { type ScreeningResult } from "@/lib/engine/calculator";
+import { type ScreeningResult, minimumDevelopedLength } from "@/lib/engine/calculator";
 import { cn } from "@/lib/utils";
+
+const PipeRouteViewer = dynamic(
+  () => import("@/components/pipe-route-viewer").then((m) => m.PipeRouteViewer),
+  { ssr: false, loading: () => <div className="h-[240px] w-full rounded-[12px] bg-[#FAFAFA] border border-[#E5E7EB] animate-pulse" /> },
+);
 
 interface ResultPanelProps {
   result: ScreeningResult | null;
   error: string | null;
+  L: number;
+  U: number;
+  Do: number;
 }
 
-export function ResultPanel({ result, error }: ResultPanelProps) {
+export function ResultPanel({ result, error, L, U, Do }: ResultPanelProps) {
   if (error) {
     return (
       <Card className="border border-[#DC2626]">
@@ -46,6 +55,7 @@ export function ResultPanel({ result, error }: ResultPanelProps) {
 
   const pass = !result.analysisRequired;
   const utilPct = Math.min(result.utilization * 100, 999);
+  const Lmin = minimumDevelopedLength(Do, result.y, U);
 
   return (
     <div className="grid gap-6">
@@ -111,6 +121,43 @@ export function ResultPanel({ result, error }: ResultPanelProps) {
         </CardContent>
       </Card>
 
+      {/* 3D Pipe Route Visualization */}
+      <Card>
+        <CardHeader>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[#9CA3AF]">
+            Pipe Route
+          </span>
+        </CardHeader>
+        <CardContent>
+          <PipeRouteViewer L={L} U={U} pass={pass} />
+        </CardContent>
+      </Card>
+
+      {/* Minimum length recommendation (only when failing) */}
+      {!pass && result.y > 0 && (
+        <Card className="border border-[#D97706]">
+          <CardHeader>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[#D97706]">
+              Recommendation
+            </span>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <p className="text-[13px] text-[#374151]">
+              To pass screening, increase the developed length to at least:
+            </p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[28px] font-bold text-[#D97706] leading-none">
+                {Lmin.toFixed(1)}
+              </span>
+              <span className="text-[14px] text-[#6B7280]">m (minimum L)</span>
+            </div>
+            <p className="text-[12px] text-[#9CA3AF]">
+              Current: L = {L.toFixed(1)} m — need {(Lmin - L).toFixed(1)} m more developed length.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Parameters card */}
       <Card>
         <CardHeader>
@@ -128,6 +175,7 @@ export function ResultPanel({ result, error }: ResultPanelProps) {
               value={result.ratio === Infinity ? "\u221E" : result.ratio.toFixed(1)}
             />
             <DetailRow label="K\u2081 threshold" value={result.K1.toString()} />
+            {!pass && <DetailRow label="Min. developed length" value={`${Lmin.toFixed(1)} m`} highlight />}
           </dl>
         </CardContent>
       </Card>

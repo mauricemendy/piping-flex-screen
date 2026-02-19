@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { ScreeningForm, type FormData } from "@/components/screening-form";
 import { ResultPanel } from "@/components/result-panel";
 import { UnitToggle } from "@/components/unit-toggle";
@@ -74,7 +75,15 @@ export default function Home() {
               ASME {formData.code} §319.4.1 Flexibility Screening
             </p>
           </div>
-          <UnitToggle value={unitSystem} onChange={setUnitSystem} />
+          <div className="flex items-center gap-3">
+            <Link
+              href="/sif"
+              className="rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] hover:bg-[#F9FAFB] transition-colors"
+            >
+              SIF Calculator
+            </Link>
+            <UnitToggle value={unitSystem} onChange={setUnitSystem} />
+          </div>
         </div>
       </header>
 
@@ -92,7 +101,7 @@ export default function Home() {
 
           {/* Right: Results (sticky on desktop) */}
           <div className="lg:sticky lg:top-24 lg:self-start">
-            <ResultPanel result={result} error={error} />
+            <ResultPanel result={result} error={error} L={formData.L} U={formData.U} Do={formData.Do} />
           </div>
         </div>
       </main>
