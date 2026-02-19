@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { ScreeningForm, type FormData } from "@/components/screening-form";
 import { ResultPanel } from "@/components/result-panel";
 import { UnitToggle } from "@/components/unit-toggle";
+import {
+  HistoryPanel,
+  saveScreening,
+  isSupabaseConfigured,
+} from "@/components/history-panel";
 import { performScreening, type ScreeningResult } from "@/lib/engine/calculator";
 import { type UnitSystem } from "@/lib/engine/units";
 import { PIPE_SIZES } from "@/lib/engine/pipe-data";
@@ -30,6 +35,8 @@ const defaultFormData: FormData = {
 export default function Home() {
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("SI");
   const [formData, setFormData] = useState<FormData>(defaultFormData);
+  const [saving, setSaving] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
 
   const { result, error } = useMemo((): {
     result: ScreeningResult | null;
@@ -62,6 +69,21 @@ export default function Home() {
     }
   }, [formData]);
 
+  const handleSave = useCallback(async () => {
+    if (!result) return;
+    setSaving(true);
+    const name = `${formData.nps} ${formData.material.split(" (")[0]} @ ${formData.T1}°C`;
+    await saveScreening(name, formData, result);
+    setSaving(false);
+    setHistoryKey((k) => k + 1);
+  }, [formData, result]);
+
+  const handleLoad = useCallback((data: FormData) => {
+    setFormData(data);
+  }, []);
+
+  const supabaseReady = isSupabaseConfigured();
+
   return (
     <div className="min-h-screen bg-[#F3F4F6]">
       {/* Header */}
@@ -76,6 +98,15 @@ export default function Home() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {supabaseReady && result && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-[8px] bg-[#111827] px-4 py-2 text-[14px] font-medium text-white hover:bg-[#374151] disabled:opacity-50 transition-colors"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            )}
             <Link
               href="/sif"
               className="rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] hover:bg-[#F9FAFB] transition-colors"
@@ -90,13 +121,16 @@ export default function Home() {
       {/* Main content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-10">
         <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-          {/* Left: Form */}
-          <div>
+          {/* Left: Form + History */}
+          <div className="grid gap-6">
             <ScreeningForm
               data={formData}
               unitSystem={unitSystem}
               onChange={setFormData}
             />
+            {supabaseReady && (
+              <HistoryPanel onLoad={handleLoad} refreshKey={historyKey} />
+            )}
           </div>
 
           {/* Right: Results (sticky on desktop) */}
