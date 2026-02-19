@@ -135,7 +135,7 @@ export default function Home() {
 
           {/* Right: Results (sticky on desktop) */}
           <div className="lg:sticky lg:top-24 lg:self-start">
-            <ResultPanel result={result} error={error} L={formData.L} U={formData.U} Do={formData.Do} />
+            <ResultPanel result={result} error={error} L={formData.L} U={formData.U} Do={formData.Do} formData={formData} />
           </div>
         </div>
       </main>

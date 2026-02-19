@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { type ScreeningResult, minimumDevelopedLength } from "@/lib/engine/calculator";
+import { type FormData } from "@/components/screening-form";
 import { cn } from "@/lib/utils";
 
 const PipeRouteViewer = dynamic(
@@ -17,9 +18,10 @@ interface ResultPanelProps {
   L: number;
   U: number;
   Do: number;
+  formData?: FormData;
 }
 
-export function ResultPanel({ result, error, L, U, Do }: ResultPanelProps) {
+export function ResultPanel({ result, error, L, U, Do, formData }: ResultPanelProps) {
   if (error) {
     return (
       <Card className="border border-[#DC2626]">
@@ -76,9 +78,27 @@ export function ResultPanel({ result, error, L, U, Do }: ResultPanelProps) {
               {pass ? "PASS" : "FAIL"}
             </p>
           </div>
-          <Badge variant={pass ? "pass" : "fail"}>
-            {pass ? "No Analysis Req." : "Analysis Required"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={pass ? "pass" : "fail"}>
+              {pass ? "No Analysis Req." : "Analysis Required"}
+            </Badge>
+            {formData && (
+              <button
+                onClick={() => {
+                  import("@/lib/pdf/generate-report").then(({ generateScreeningPDF }) => {
+                    generateScreeningPDF(formData, result);
+                  });
+                }}
+                className="inline-flex items-center gap-1 rounded-[4px] border border-[#E5E7EB] bg-white px-2 py-1 text-[10px] font-medium text-[#374151] hover:bg-[#F9FAFB] transition-colors"
+                title="Export PDF report"
+              >
+                <svg width="12" height="12" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M7.5 1.5V10.5M7.5 10.5L4 7M7.5 10.5L11 7M2 13.5H13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                PDF
+              </button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4">
           <p className={cn(
