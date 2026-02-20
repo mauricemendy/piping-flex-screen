@@ -36,8 +36,9 @@ export function generateScreeningPDF(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(200, 200, 200);
+  const codeSection = result.code === "B31.1" ? "§119.7.1" : "§319.4.1";
   doc.text(
-    `ASME ${result.code} §319.4.1  |  Generated ${new Date().toISOString().slice(0, 10)}`,
+    `ASME ${result.code} ${codeSection}  |  Generated ${new Date().toISOString().slice(0, 10)}`,
     margin,
     22,
   );
@@ -74,7 +75,8 @@ export function generateScreeningPDF(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...GRAY);
-  doc.text("Screening Criterion (§319.4.1(c)):", margin + 4, y + 6);
+  const criterionRef = result.code === "B31.1" ? "§119.7.1(A)" : "§319.4.1(c)";
+  doc.text(`Screening Criterion (${criterionRef}):`, margin + 4, y + 6);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -225,7 +227,7 @@ export function generateScreeningPDF(
     { align: "center" },
   );
   doc.text(
-    "Formal flexibility analysis per §319.4.4 is recommended for all final designs.",
+    `Formal flexibility analysis per ${result.code === "B31.1" ? "§119.7" : "§319.4.4"} is recommended for all final designs.`,
     pageWidth / 2,
     doc.internal.pageSize.getHeight() - 6,
     { align: "center" },

@@ -167,7 +167,13 @@ export const THERMAL_EXPANSION_TABLES: Record<string, DataPoint[]> = {
 
 /**
  * Allowable stress (Sh) vs temperature for common materials.
- * Values in MPa. Source: ASME B31.3 Table A-1.
+ * Values in MPa.
+ *
+ * B31.3 (Process Piping): Source ASME B31.3 Table A-1.
+ *   Uses 1/3 tensile strength basis — higher allowable stresses.
+ *
+ * B31.1 (Power Piping): Source ASME B31.1 Table A-1.
+ *   Uses 1/3.5 tensile strength basis — more conservative allowable stresses.
  */
 export const ALLOWABLE_STRESS_TABLES: Record<string, DataPoint[]> = {
   "Carbon Steel (A106-B)": [
@@ -226,8 +232,92 @@ export const ALLOWABLE_STRESS_TABLES: Record<string, DataPoint[]> = {
   ],
 };
 
-/** List of available material names. */
-export function getAvailableMaterials(): string[] {
+/**
+ * Allowable stress tables for ASME B31.1 (Power Piping).
+ * Values in MPa. Source: ASME B31.1 Table A-1.
+ *
+ * B31.1 uses 1/3.5 × tensile strength (vs 1/3 for B31.3),
+ * resulting in lower allowable stresses for the same materials.
+ */
+export const ALLOWABLE_STRESS_TABLES_B311: Record<string, DataPoint[]> = {
+  "Carbon Steel (A106-B)": [
+    { temperature: 20, value: 120.7 },
+    { temperature: 100, value: 120.7 },
+    { temperature: 150, value: 120.7 },
+    { temperature: 200, value: 120.7 },
+    { temperature: 250, value: 120.7 },
+    { temperature: 300, value: 120.7 },
+    { temperature: 350, value: 117.2 },
+    { temperature: 400, value: 103.4 },
+    { temperature: 425, value: 94.5 },
+    { temperature: 450, value: 82.7 },
+    { temperature: 500, value: 58.6 },
+  ],
+  "304 Stainless Steel": [
+    { temperature: 20, value: 120.7 },
+    { temperature: 100, value: 115.1 },
+    { temperature: 150, value: 110.3 },
+    { temperature: 200, value: 106.2 },
+    { temperature: 250, value: 102.7 },
+    { temperature: 300, value: 99.3 },
+    { temperature: 350, value: 97.2 },
+    { temperature: 400, value: 95.1 },
+    { temperature: 450, value: 93.8 },
+    { temperature: 500, value: 92.4 },
+    { temperature: 550, value: 91.0 },
+    { temperature: 600, value: 89.6 },
+  ],
+  "316 Stainless Steel": [
+    { temperature: 20, value: 120.7 },
+    { temperature: 100, value: 115.1 },
+    { temperature: 150, value: 110.3 },
+    { temperature: 200, value: 106.2 },
+    { temperature: 250, value: 102.7 },
+    { temperature: 300, value: 99.3 },
+    { temperature: 350, value: 97.2 },
+    { temperature: 400, value: 95.1 },
+    { temperature: 450, value: 93.8 },
+    { temperature: 500, value: 92.4 },
+    { temperature: 550, value: 91.7 },
+    { temperature: 600, value: 91.0 },
+  ],
+  "Chrome-Moly (A335-P11)": [
+    { temperature: 20, value: 103.4 },
+    { temperature: 100, value: 103.4 },
+    { temperature: 150, value: 103.4 },
+    { temperature: 200, value: 103.4 },
+    { temperature: 250, value: 103.4 },
+    { temperature: 300, value: 103.4 },
+    { temperature: 350, value: 103.4 },
+    { temperature: 400, value: 103.4 },
+    { temperature: 450, value: 101.3 },
+    { temperature: 500, value: 96.5 },
+    { temperature: 550, value: 84.1 },
+  ],
+};
+
+/**
+ * Get the correct allowable stress table for a given piping code.
+ * B31.3 uses higher allowable stresses (1/3 UTS basis).
+ * B31.1 uses more conservative values (1/3.5 UTS basis).
+ */
+export function getAllowableStressTable(
+  code: PipingCode,
+): Record<string, DataPoint[]> {
+  return code === "B31.1"
+    ? ALLOWABLE_STRESS_TABLES_B311
+    : ALLOWABLE_STRESS_TABLES;
+}
+
+/** List of available material names for a given code. */
+export function getAvailableMaterials(code?: PipingCode): string[] {
+  if (code) {
+    const stressTable = getAllowableStressTable(code);
+    // Return materials present in all three tables for this code
+    return Object.keys(YOUNGS_MODULUS_TABLES).filter(
+      (m) => m in stressTable && m in THERMAL_EXPANSION_TABLES,
+    );
+  }
   return Object.keys(YOUNGS_MODULUS_TABLES);
 }
 
@@ -352,9 +442,12 @@ export function allowableStressRange(
 }
 
 /**
- * Main screening calculation per ASME B31.3 §319.4.1(c).
+ * Main screening calculation per ASME B31.3 §319.4.1(c) / B31.1 §119.7.1(A).
  *
  * Criterion: D·y / (L - U)² ≤ K₁
+ *
+ * The formula is identical for both codes. The difference lies in the
+ * allowable stress tables used (B31.1 is more conservative).
  *
  * If the criterion is satisfied, formal flexibility analysis is NOT required.
  */
@@ -379,9 +472,10 @@ export function performScreening(input: ScreeningInput): ScreeningResult {
   if (tn <= 0) throw new Error("Wall thickness tn must be positive");
   if (tn >= Do / 2) throw new Error("Wall thickness tn must be less than radius");
 
-  // Material property lookups
+  // Material property lookups (allowable stress depends on piping code)
   const eTable = YOUNGS_MODULUS_TABLES[material];
-  const shTable = ALLOWABLE_STRESS_TABLES[material];
+  const stressTables = getAllowableStressTable(code);
+  const shTable = stressTables[material];
   const expTable = THERMAL_EXPANSION_TABLES[material];
 
   if (!eTable || !shTable || !expTable) {

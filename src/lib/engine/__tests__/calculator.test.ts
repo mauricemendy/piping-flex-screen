@@ -6,11 +6,13 @@ import {
   allowableStressRange,
   minimumDevelopedLength,
   getAvailableMaterials,
+  getAllowableStressTable,
   K1_SI,
   K1_IMPERIAL,
   YOUNGS_MODULUS_TABLES,
   THERMAL_EXPANSION_TABLES,
   ALLOWABLE_STRESS_TABLES,
+  ALLOWABLE_STRESS_TABLES_B311,
   type ScreeningInput,
 } from "../calculator";
 
@@ -419,6 +421,192 @@ describe("calculator", () => {
       });
       // Small pipe, low temperature, good flexibility → passes
       expect(result.analysisRequired).toBe(false);
+    });
+  });
+
+  // ─── B31.1 (Power Piping) support ──────────────────────────────────────────
+
+  describe("B31.1 support", () => {
+    const b311Input: ScreeningInput = {
+      code: "B31.1",
+      material: "Carbon Steel (A106-B)",
+      Do: 168.3,
+      tn: 7.11,
+      T1: 300,
+      T2: 20,
+      L: 30,
+      U: 20,
+    };
+
+    describe("B31.1 allowable stress tables", () => {
+      it("has tables for all 4 standard materials", () => {
+        const materials = [
+          "Carbon Steel (A106-B)",
+          "304 Stainless Steel",
+          "316 Stainless Steel",
+          "Chrome-Moly (A335-P11)",
+        ];
+        for (const m of materials) {
+          expect(ALLOWABLE_STRESS_TABLES_B311[m]).toBeDefined();
+          expect(ALLOWABLE_STRESS_TABLES_B311[m].length).toBeGreaterThan(0);
+        }
+      });
+
+      it("B31.1 stresses are sorted by temperature", () => {
+        for (const [, table] of Object.entries(ALLOWABLE_STRESS_TABLES_B311)) {
+          for (let i = 1; i < table.length; i++) {
+            expect(table[i].temperature).toBeGreaterThan(table[i - 1].temperature);
+          }
+        }
+      });
+
+      it("B31.1 stresses are all positive", () => {
+        for (const [, table] of Object.entries(ALLOWABLE_STRESS_TABLES_B311)) {
+          for (const pt of table) {
+            expect(pt.value).toBeGreaterThan(0);
+          }
+        }
+      });
+
+      it("B31.1 stresses are lower than B31.3 (more conservative)", () => {
+        // B31.1 uses 1/3.5 UTS vs 1/3 UTS — always more conservative
+        for (const material of Object.keys(ALLOWABLE_STRESS_TABLES_B311)) {
+          const b313Table = ALLOWABLE_STRESS_TABLES[material];
+          const b311Table = ALLOWABLE_STRESS_TABLES_B311[material];
+          // Compare at room temperature (first entry)
+          expect(b311Table[0].value).toBeLessThan(b313Table[0].value);
+        }
+      });
+    });
+
+    describe("getAllowableStressTable", () => {
+      it("returns B31.3 tables for code B31.3", () => {
+        const table = getAllowableStressTable("B31.3");
+        expect(table).toBe(ALLOWABLE_STRESS_TABLES);
+      });
+
+      it("returns B31.1 tables for code B31.1", () => {
+        const table = getAllowableStressTable("B31.1");
+        expect(table).toBe(ALLOWABLE_STRESS_TABLES_B311);
+      });
+    });
+
+    describe("getAvailableMaterials with code", () => {
+      it("returns materials for B31.3", () => {
+        const mats = getAvailableMaterials("B31.3");
+        expect(mats).toContain("Carbon Steel (A106-B)");
+        expect(mats.length).toBe(4);
+      });
+
+      it("returns materials for B31.1", () => {
+        const mats = getAvailableMaterials("B31.1");
+        expect(mats).toContain("Carbon Steel (A106-B)");
+        expect(mats.length).toBe(4);
+      });
+
+      it("returns all materials when no code specified", () => {
+        const mats = getAvailableMaterials();
+        expect(mats.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe("performScreening with B31.1", () => {
+      it("returns code B31.1 in result", () => {
+        const result = performScreening(b311Input);
+        expect(result.code).toBe("B31.1");
+      });
+
+      it("uses B31.1 allowable stresses (lower than B31.3)", () => {
+        const b313Result = performScreening({ ...b311Input, code: "B31.3" });
+        const b311Result = performScreening(b311Input);
+
+        // B31.1 Sc and Sh should be lower
+        expect(b311Result.Sc).toBeLessThan(b313Result.Sc);
+        expect(b311Result.Sh).toBeLessThan(b313Result.Sh);
+      });
+
+      it("uses same Young's modulus for both codes", () => {
+        const b313Result = performScreening({ ...b311Input, code: "B31.3" });
+        const b311Result = performScreening(b311Input);
+
+        // Young's modulus comes from ASME II Part D — same for both codes
+        expect(b311Result.Ea).toBe(b313Result.Ea);
+        expect(b311Result.Ec).toBe(b313Result.Ec);
+      });
+
+      it("uses same thermal displacement for both codes", () => {
+        const b313Result = performScreening({ ...b311Input, code: "B31.3" });
+        const b311Result = performScreening(b311Input);
+
+        // Thermal expansion from ASME II Part D — same for both
+        expect(b311Result.y).toBe(b313Result.y);
+        expect(b311Result.thermalExpansion).toBe(b313Result.thermalExpansion);
+      });
+
+      it("produces same screening ratio (geometry-only)", () => {
+        const b313Result = performScreening({ ...b311Input, code: "B31.3" });
+        const b311Result = performScreening(b311Input);
+
+        // D·y/(L-U)² is code-independent
+        expect(b311Result.ratio).toBe(b313Result.ratio);
+        expect(b311Result.K1).toBe(b313Result.K1);
+        expect(b311Result.utilization).toBe(b313Result.utilization);
+      });
+
+      it("produces lower SA for B31.1", () => {
+        const b313Result = performScreening({ ...b311Input, code: "B31.3" });
+        const b311Result = performScreening(b311Input);
+
+        // SA = f(1.25Sc + 0.25Sh) — lower Sc, Sh → lower SA
+        expect(b311Result.SA).toBeLessThan(b313Result.SA);
+      });
+
+      it("CS at 20°C has B31.1 Sc = 120.7 MPa", () => {
+        const result = performScreening(b311Input);
+        expect(result.Sc).toBeCloseTo(120.7, 0);
+      });
+
+      it("CS at 300°C has B31.1 Sh = 120.7 MPa", () => {
+        const result = performScreening(b311Input);
+        expect(result.Sh).toBeCloseTo(120.7, 0);
+      });
+    });
+
+    describe("B31.1 real-world scenarios", () => {
+      it("6\" CS power piping at 300°C, L=30m, U=20m", () => {
+        const result = performScreening(b311Input);
+        // Same pass/fail as B31.3 (screening ratio is code-independent)
+        const b313Result = performScreening({ ...b311Input, code: "B31.3" });
+        expect(result.analysisRequired).toBe(b313Result.analysisRequired);
+      });
+
+      it("8\" SS power piping at 450°C, L=40m, U=25m — should pass", () => {
+        const result = performScreening({
+          code: "B31.1",
+          material: "304 Stainless Steel",
+          Do: 219.1,
+          tn: 8.18,
+          T1: 450,
+          L: 40,
+          U: 25,
+        });
+        expect(result.analysisRequired).toBe(false);
+        expect(result.code).toBe("B31.1");
+      });
+
+      it("12\" CrMo power piping at 500°C, L=18m, U=16m — should fail", () => {
+        const result = performScreening({
+          code: "B31.1",
+          material: "Chrome-Moly (A335-P11)",
+          Do: 323.8,
+          tn: 12.70,
+          T1: 500,
+          L: 18,
+          U: 16,
+        });
+        expect(result.analysisRequired).toBe(true);
+        expect(result.code).toBe("B31.1");
+      });
     });
   });
 });

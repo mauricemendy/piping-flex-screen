@@ -94,7 +94,7 @@ export default function Home() {
               Flex Screen
             </h1>
             <p className="text-[12px] text-[#9CA3AF]">
-              ASME {formData.code} §319.4.1 Flexibility Screening
+              ASME {formData.code} {formData.code === "B31.1" ? "§119.7.1" : "§319.4.1"} Flexibility Screening
             </p>
           </div>
           <div className="flex items-center gap-3">
