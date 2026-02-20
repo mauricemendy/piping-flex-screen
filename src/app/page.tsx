@@ -6,6 +6,10 @@ import { ScreeningForm, type FormData } from "@/components/screening-form";
 import { ResultPanel } from "@/components/result-panel";
 import { UnitToggle } from "@/components/unit-toggle";
 import {
+  ComparisonPanel,
+  type ComparisonCase,
+} from "@/components/comparison-panel";
+import {
   HistoryPanel,
   saveScreening,
   isSupabaseConfigured,
@@ -37,6 +41,8 @@ export default function Home() {
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   const [saving, setSaving] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareCases, setCompareCases] = useState<ComparisonCase[]>([]);
 
   const { result, error } = useMemo((): {
     result: ScreeningResult | null;
@@ -82,6 +88,27 @@ export default function Home() {
     setFormData(data);
   }, []);
 
+  const handleAddToCompare = useCallback(() => {
+    if (!result) return;
+    const name = `${formData.nps} ${formData.material.split(" (")[0]} @ ${formData.T1}°C`;
+    const newCase: ComparisonCase = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      formData: { ...formData },
+      result,
+    };
+    setCompareCases((prev) => [...prev, newCase]);
+    setCompareOpen(true);
+  }, [formData, result]);
+
+  const handleRemoveCase = useCallback((id: string) => {
+    setCompareCases((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const handleClearCases = useCallback(() => {
+    setCompareCases([]);
+  }, []);
+
   const supabaseReady = isSupabaseConfigured();
 
   return (
@@ -98,6 +125,22 @@ export default function Home() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {result && (
+              <button
+                onClick={handleAddToCompare}
+                className="rounded-[8px] border border-[#0D9488] bg-white px-4 py-2 text-[14px] font-medium text-[#0D9488] hover:bg-[#F0FDFA] transition-colors"
+              >
+                + Compare
+              </button>
+            )}
+            {compareCases.length > 0 && (
+              <button
+                onClick={() => setCompareOpen((v) => !v)}
+                className="rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-2 text-[14px] font-medium text-[#374151] hover:bg-[#F9FAFB] transition-colors"
+              >
+                {compareOpen ? "Hide" : "Show"} ({compareCases.length})
+              </button>
+            )}
             {supabaseReady && result && (
               <button
                 onClick={handleSave}
@@ -120,6 +163,18 @@ export default function Home() {
 
       {/* Main content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-10">
+        {/* Comparison panel (collapsible) */}
+        {compareOpen && (
+          <div className="mb-8">
+            <ComparisonPanel
+              cases={compareCases}
+              onRemove={handleRemoveCase}
+              onLoad={handleLoad}
+              onClear={handleClearCases}
+            />
+          </div>
+        )}
+
         <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
           {/* Left: Form + History */}
           <div className="grid gap-6">
